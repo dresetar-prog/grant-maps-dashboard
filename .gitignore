@@ -1,0 +1,13 @@
+# Operating System files
+.DS_Store
+Thumbs.db
+
+# Temporary and raw Excel files
+*.xlsx
+~$*
+
+# Python virtual environments & checkpoints
+venv/
+.env
+.ipynb_checkpoints/
+__pycache__/
