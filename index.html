@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Grant Application Analytics Dashboard</title>
+  <!-- Leaflet CSS for Maps -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 20px; background: #f8fafc; }
+    h1 { margin-bottom: 8px; color: #0f172a; }
+    p { color: #475569; margin-top: 0; }
+    #map { height: 550px; width: 100%; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); margin-bottom: 24px; }
+    .charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; }
+    .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+  </style>
+</head>
+<body>
+  <h1>Grant Application Geospatial & Cohort Analysis</h1>
+  <p>Interactive exploration of 43,111 grant applicants across geographic and financial metrics.</p>
+
+  <div id="map"></div>
+
+  <div class="charts-grid">
+    <div class="card"><canvas id="sectorChart"></canvas></div>
+    <div class="card"><canvas id="revenueChart"></canvas></div>
+  </div>
+
+  <!-- Core Data & Visualization Libraries -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</body>
+</html>
