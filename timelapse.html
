@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>S.A.W.M. - Applicant Time-Lapse</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <style>
+    html, body { height: 100%; margin: 0; padding: 0; background-color: #0b0f19; }
+    #map { height: calc(100vh - 72px); width: 100%; z-index: 10; }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      height: 18px;
+      width: 18px;
+      border-radius: 50%;
+      background: #38bdf8;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.7);
+    }
+  </style>
+</head>
+<body class="text-slate-100 flex flex-col h-screen overflow-hidden antialiased">
+
+  <!-- Header Bar -->
+  <header class="bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center justify-between z-30 shadow-md">
+    <div class="flex items-center gap-3">
+      <a href="index.html" class="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-2.5 py-1.5 rounded-lg border border-slate-700 transition">
+        <span>&larr;</span>
+        <span class="font-medium">S.A.W.M. Dashboard</span>
+      </a>
+      <div>
+        <h1 class="text-sm font-bold text-white tracking-wide flex items-center gap-2">
+          <span>Applicant Geographic Expansion</span>
+          <span class="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded-full font-mono uppercase">Time-Lapse</span>
+        </h1>
+        <p class="text-[11px] text-slate-400 hidden sm:block">Cumulative applicant volume from May 2021 &mdash; Present</p>
+      </div>
+    </div>
+
+    <!-- Active Metric Ticker -->
+    <div class="flex items-center gap-4 text-right">
+      <div>
+        <div class="text-[10px] uppercase font-semibold text-slate-400">Timeline</div>
+        <div id="currentMonthLabel" class="text-sm font-bold text-sky-400 font-mono">Loading...</div>
+      </div>
+      <div class="border-l border-slate-800 pl-4">
+        <div class="text-[10px] uppercase font-semibold text-slate-400">Total Mapped</div>
+        <div id="currentCountLabel" class="text-sm font-bold text-emerald-400 font-mono">--</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Interactive Map Container -->
+  <div class="relative flex-1 w-full bg-slate-950">
+    <div id="map"></div>
+
+    <!-- Floating Playback Control Bar -->
+    <div class="absolute bottom-6 left-1/2 -translate-x-1/2 w-11/12 max-w-2xl bg-slate-900/90 backdrop-blur-md border border-slate-700/60 rounded-xl p-3.5 shadow-2xl z-20 flex flex-col gap-2.5">
+      
+      <!-- Scrubbing Slider -->
+      <div class="flex items-center gap-3">
+        <span class="text-[11px] text-slate-400 font-mono" id="startRangeLabel">May 2021</span>
+        <input id="timeSlider" type="range" min="0" max="63" value="0" class="flex-1 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer focus:outline-none" />
+        <span class="text-[11px] text-slate-400 font-mono" id="endRangeLabel">Oct 2026</span>
+      </div>
+
+      <!-- Playback Buttons & Speeds -->
+      <div class="flex items-center justify-between pt-1 border-t border-slate-800/80">
+        <div class="flex items-center gap-2">
+          <button id="btnPlayPause" type="button" class="bg-blue-600 hover:bg-blue-500 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow transition">
+            <span id="playIcon">&#9654;</span>
+            <span id="playText">Play</span>
+          </button>
+          <button id="btnReset" type="button" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-700 transition">
+            Reset
+          </button>
+        </div>
+
+        <div class="flex items-center gap-1 text-xs">
+          <span class="text-slate-400 text-[11px] mr-1">Speed:</span>
+          <button class="speed-btn px-2 py-1 rounded bg-slate-800 text-slate-300 hover:text-white" data-speed="400">1x</button>
+          <button class="speed-btn px-2 py-1 rounded bg-blue-600 text-white font-bold" data-speed="200">2x</button>
+          <button class="speed-btn px-2 py-1 rounded bg-slate-800 text-slate-300 hover:text-white" data-speed="100">4x</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Libraries -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <script>
+    const ZIP2_COORDS = {
+      "00": [18.2, -66.5], "01": [42.3, -71.8], "02": [42.1, -71.1], "03": [43.2, -71.5], "04": [44.5, -69.5],
+      "05": [44.0, -72.7], "06": [41.6, -72.7], "07": [40.8, -74.3], "08": [39.9, -74.6], "09": [40.0, -74.0],
+      "10": [40.8, -73.8], "11": [40.7, -73.6], "12": [42.6, -73.8], "13": [43.1, -75.8], "14": [42.8, -77.8],
+      "15": [40.4, -79.9], "16": [41.2, -79.2], "17": [40.3, -76.8], "18": [41.1, -75.6], "19": [39.9, -75.2],
+      "20": [38.9, -77.0], "21": [39.2, -76.6], "22": [38.8, -77.3], "23": [37.3, -77.0], "24": [37.3, -80.0],
+      "25": [38.3, -81.6], "26": [39.3, -80.3], "27": [35.8, -78.6], "28": [35.2, -80.8], "29": [34.0, -81.0],
+      "30": [33.7, -84.4], "31": [32.0, -83.5], "32": [30.3, -81.7], "33": [26.1, -80.2], "34": [27.9, -82.5],
+      "35": [33.5, -86.8], "36": [32.3, -86.3], "37": [36.1, -86.8], "38": [35.1, -89.9], "39": [32.3, -90.2],
+      "40": [38.2, -85.7], "41": [37.7, -84.3], "42": [37.0, -87.1], "43": [40.0, -82.9], "44": [41.5, -81.7],
+      "45": [39.1, -84.5], "46": [39.8, -86.1], "47": [38.0, -87.5], "48": [42.3, -83.0], "49": [42.9, -85.6],
+      "50": [41.6, -93.6], "51": [41.2, -95.8], "52": [42.5, -91.6], "53": [43.0, -87.9], "54": [44.5, -89.5],
+      "55": [44.9, -93.2], "56": [46.8, -94.2], "57": [44.0, -99.9], "58": [47.5, -100.5],"59": [46.8, -110.3],
+      "60": [41.8, -87.6], "61": [40.7, -89.6], "62": [38.6, -89.9], "63": [38.6, -90.2], "64": [39.1, -94.6],
+      "65": [37.9, -92.5], "66": [39.0, -95.6], "67": [37.7, -97.3], "68": [41.2, -96.0], "69": [41.8, -101.5],
+      "70": [29.9, -90.1], "71": [32.5, -93.7], "72": [34.7, -92.3], "73": [35.5, -97.5], "74": [36.1, -95.9],
+      "75": [32.8, -96.8], "76": [32.7, -97.3], "77": [29.7, -95.3], "78": [30.3, -97.7], "79": [33.5, -101.8],
+      "80": [39.7, -104.9],"81": [38.5, -107.0],"82": [43.0, -107.5],"83": [43.6, -116.2],"84": [40.7, -111.9],
+      "85": [33.4, -112.0],"86": [35.2, -111.6],"87": [35.1, -106.6],"88": [33.4, -104.5],"89": [36.2, -115.1],
+      "90": [34.0, -118.2],"91": [34.2, -118.4],"92": [32.7, -117.1],"93": [36.7, -119.8],"94": [37.7, -122.4],
+      "95": [38.6, -121.5],"96": [21.3, -157.8],"97": [45.5, -122.6],"98": [47.6, -122.3],"99": [47.6, -117.4]
+    };
+
+    const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+    let map, heatLayer;
+    let monthlyBuckets = {};
+    let sortedMonths = [];
+    let cumulativeData = [];
+    let currentIndex = 0;
+    let timer = null;
+    let playSpeed = 200;
+
+    function initMap() {
+      map = L.map('map', { zoomControl: false }).setView([38.5, -96.0], 4);
+      L.control.zoom({ position: 'topright' }).addTo(map);
+
+      // Esri Dark Gray Base for zero-watermark high-contrast heat visualization
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri',
+        maxZoom: 16
+      }).addTo(map);
+
+      heatLayer = L.heatLayer([], {
+        radius: 14,
+        blur: 16,
+        maxZoom: 9,
+        max: 0.85,
+        gradient: { 0.1: '#38bdf8', 0.4: '#34d399', 0.7: '#f59e0b', 0.95: '#ef4444' }
+      }).addTo(map);
+    }
+
+    function formatMonthKey(key) {
+      const [year, month] = key.split('-');
+      const monthIdx = parseInt(month, 10) - 1;
+      return `${MONTH_NAMES[monthIdx]} ${year}`;
+    }
+
+    function loadData() {
+      const candidates = ['data/grant_applications.csv', 'grant_applications_20261016.csv'];
+      
+      function tryFile(idx) {
+        if (idx >= candidates.length) return;
+        Papa.parse(candidates[idx], {
+          download: true,
+          header: true,
+          skipEmptyLines: true,
+          complete: function(results) {
+            if (results.data && results.data.length > 0) {
+              processData(results.data);
+            } else {
+              tryFile(idx + 1);
+            }
+          },
+          error: function() { tryFile(idx + 1); }
+        });
+      }
+      tryFile(0);
+    }
+
+    function processData(rows) {
+      monthlyBuckets = {};
+
+      rows.forEach(row => {
+        const rawDate = (row['Application: Created Date'] || '').trim();
+        const parts = rawDate.split('/');
+        if (parts.length === 3) {
+          const m = parts[0].padStart(2, '0');
+          const y = parts[2].trim();
+          const monthKey = `${y}-${m}`;
+
+          const rawZip = (row['Zip'] || '').toString().padStart(5, '0');
+          const prefix = rawZip.slice(0, 2);
+          if (ZIP2_COORDS[prefix]) {
+            const base = ZIP2_COORDS[prefix];
+            const zipNum = parseInt(rawZip.slice(2, 5)) || 0;
+            const latJitter = ((zipNum % 100) / 100 - 0.5) * 0.45;
+            const lngJitter = (Math.floor(zipNum / 100) / 10 - 0.5) * 0.45;
+
+            if (!monthlyBuckets[monthKey]) monthlyBuckets[monthKey] = [];
+            monthlyBuckets[monthKey].push([base[0] + latJitter, base[1] + lngJitter, 0.65]);
+          }
+        }
+      });
+
+      sortedMonths = Object.keys(monthlyBuckets).sort();
+      
+      // Pre-compute cumulative array snapshots
+      let runningPoints = [];
+      cumulativeData = sortedMonths.map(m => {
+        runningPoints = runningPoints.concat(monthlyBuckets[m]);
+        return {
+          monthKey: m,
+          points: [...runningPoints]
+        };
+      });
+
+      const slider = document.getElementById('timeSlider');
+      slider.max = sortedMonths.length - 1;
+      slider.value = 0;
+
+      document.getElementById('startRangeLabel').innerText = formatMonthKey(sortedMonths[0]);
+      document.getElementById('endRangeLabel').innerText = formatMonthKey(sortedMonths[sortedMonths.length - 1]);
+
+      renderFrame(0);
+      setupControls();
+    }
+
+    function renderFrame(index) {
+      if (!cumulativeData[index]) return;
+      currentIndex = index;
+      document.getElementById('timeSlider').value = index;
+
+      const frame = cumulativeData[index];
+      heatLayer.setLatLngs(frame.points);
+
+      document.getElementById('currentMonthLabel').innerText = formatMonthKey(frame.monthKey);
+      document.getElementById('currentCountLabel').innerText = frame.points.length.toLocaleString();
+    }
+
+    function setupControls() {
+      const playBtn = document.getElementById('btnPlayPause');
+      const slider = document.getElementById('timeSlider');
+
+      function togglePlay() {
+        if (timer) {
+          clearInterval(timer);
+          timer = null;
+          document.getElementById('playIcon').innerHTML = '&#9654;';
+          document.getElementById('playText').innerText = 'Play';
+        } else {
+          if (currentIndex >= sortedMonths.length - 1) currentIndex = 0;
+          document.getElementById('playIcon').innerHTML = '&#10074;&#10074;';
+          document.getElementById('playText').innerText = 'Pause';
+          timer = setInterval(() => {
+            if (currentIndex < sortedMonths.length - 1) {
+              renderFrame(currentIndex + 1);
+            } else {
+              togglePlay();
+            }
+          }, playSpeed);
+        }
+      }
+
+      playBtn.addEventListener('click', togglePlay);
+
+      document.getElementById('btnReset').addEventListener('click', () => {
+        if (timer) togglePlay();
+        renderFrame(0);
+      });
+
+      slider.addEventListener('input', (e) => {
+        if (timer) togglePlay();
+        renderFrame(parseInt(e.target.value, 10));
+      });
+
+      document.querySelectorAll('.speed-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.speed-btn').forEach(b => {
+            b.classList.remove('bg-blue-600', 'text-white', 'font-bold');
+            b.classList.add('bg-slate-800', 'text-slate-300');
+          });
+          btn.classList.add('bg-blue-600', 'text-white', 'font-bold');
+          btn.classList.remove('bg-slate-800', 'text-slate-300');
+          playSpeed = parseInt(btn.dataset.speed, 10);
+          if (timer) {
+            togglePlay();
+            togglePlay();
+          }
+        });
+      });
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initMap();
+      loadData();
+    });
+  </script>
+</body>
+</html>
