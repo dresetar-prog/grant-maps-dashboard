@@ -4,32 +4,404 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Grant Application Analytics Dashboard</title>
-  <!-- Leaflet CSS for Maps -->
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 20px; background: #f8fafc; }
-    h1 { margin-bottom: 8px; color: #0f172a; }
-    p { color: #475569; margin-top: 0; }
-    #map { height: 550px; width: 100%; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); margin-bottom: 24px; }
-    .charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; }
-    .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+    #map { height: 500px; width: 100%; border-radius: 0.75rem; z-index: 10; }
   </style>
 </head>
-<body>
-  <h1>Grant Application Geospatial & Cohort Analysis</h1>
-  <p>Interactive exploration of 43,111 grant applicants across geographic and financial metrics.</p>
+<body class="bg-slate-50 text-slate-800 antialiased min-h-screen flex flex-col">
 
-  <div id="map"></div>
+  <!-- Header -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-20 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div>
+        <h1 class="text-xl font-bold text-slate-900">Grant Application Analytics & Heatmap</h1>
+        <p class="text-xs text-slate-500 mt-0.5">Exploring 43,111 applicants across geography, revenue, and business models</p>
+      </div>
 
-  <div class="charts-grid">
-    <div class="card"><canvas id="sectorChart"></canvas></div>
-    <div class="card"><canvas id="revenueChart"></canvas></div>
-  </div>
+      <!-- Filters -->
+      <div class="flex flex-wrap items-center gap-2 text-sm">
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1">Grant Year</label>
+          <select id="filterYear" class="border border-slate-300 rounded px-2.5 py-1.5 bg-white text-slate-700 text-xs shadow-sm focus:outline-blue-500">
+            <option value="ALL">All Years</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1">Business Model</label>
+          <select id="filterModel" class="border border-slate-300 rounded px-2.5 py-1.5 bg-white text-slate-700 text-xs shadow-sm focus:outline-blue-500">
+            <option value="ALL">All Models</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1">Revenue Bracket</label>
+          <select id="filterRev" class="border border-slate-300 rounded px-2.5 py-1.5 bg-white text-slate-700 text-xs shadow-sm focus:outline-blue-500">
+            <option value="ALL">All Revenue Tiers</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </header>
 
-  <!-- Core Data & Visualization Libraries -->
+  <!-- Main Content -->
+  <main class="max-w-7xl mx-auto px-4 py-6 flex-1 w-full space-y-6">
+
+    <!-- Loading Overlay -->
+    <div id="loader" class="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center gap-3 text-blue-700 text-sm">
+      <svg class="animate-spin h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+      </svg>
+      <span>Loading and parsing 43,111 grant application records from CSV...</span>
+    </div>
+
+    <!-- KPI Metric Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        <span class="text-xs uppercase font-semibold text-slate-400">Total Filtered</span>
+        <div id="kpiCount" class="text-2xl font-bold text-slate-900 mt-1">--</div>
+      </div>
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        <span class="text-xs uppercase font-semibold text-slate-400">Top State / Metro</span>
+        <div id="kpiTopState" class="text-2xl font-bold text-blue-600 mt-1">--</div>
+      </div>
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        <span class="text-xs uppercase font-semibold text-slate-400">Primary Business Model</span>
+        <div id="kpiTopModel" class="text-2xl font-bold text-emerald-600 mt-1">--</div>
+      </div>
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        <span class="text-xs uppercase font-semibold text-slate-400">Top Revenue Tier</span>
+        <div id="kpiTopRev" class="text-2xl font-bold text-indigo-600 mt-1 truncate">--</div>
+      </div>
+    </div>
+
+    <!-- Geospatial Heatmap -->
+    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-base font-bold text-slate-900">Applicant Density Heatmap</h2>
+          <p class="text-xs text-slate-500">Calculated across national ZIP code distributions</p>
+        </div>
+        <div class="text-xs text-slate-400 font-mono" id="heatPointCount">0 points rendered</div>
+      </div>
+      <div id="map"></div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- B2B vs B2C Doughnut -->
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col">
+        <h3 class="text-sm font-bold text-slate-900 mb-1">Business Model Split (B2B vs B2C)</h3>
+        <p class="text-xs text-slate-500 mb-4">Distribution by customer orientation</p>
+        <div class="flex-1 flex items-center justify-center relative min-h-[260px]">
+          <canvas id="b2bChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Qualifying Annual Revenues -->
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col">
+        <h3 class="text-sm font-bold text-slate-900 mb-1">Qualifying Annual Revenues</h3>
+        <p class="text-xs text-slate-500 mb-4">Self-reported business revenue tiers</p>
+        <div class="flex-1 flex items-center justify-center relative min-h-[260px]">
+          <canvas id="revChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Charts Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- Applications by Year -->
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <h3 class="text-sm font-bold text-slate-900 mb-1">Applications by Grant Year</h3>
+        <p class="text-xs text-slate-500 mb-4">Volume across grant program cycles</p>
+        <div class="relative min-h-[240px]">
+          <canvas id="yearChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Top Sectors -->
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <h3 class="text-sm font-bold text-slate-900 mb-1">Top Industry Sectors</h3>
+        <p class="text-xs text-slate-500 mb-4">Leading industry categories</p>
+        <div class="relative min-h-[240px]">
+          <canvas id="sectorChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Libraries -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <script>
+    // 2-Digit ZIP prefix centroid table for high-performance geospatial mapping
+    const ZIP2_COORDS = {
+      "00": [18.2, -66.5], "01": [42.3, -71.8], "02": [42.1, -71.1], "03": [43.2, -71.5], "04": [44.5, -69.5],
+      "05": [44.0, -72.7], "06": [41.6, -72.7], "07": [40.8, -74.3], "08": [39.9, -74.6], "09": [40.0, -74.0],
+      "10": [40.8, -73.8], "11": [40.7, -73.6], "12": [42.6, -73.8], "13": [43.1, -75.8], "14": [42.8, -77.8],
+      "15": [40.4, -79.9], "16": [41.2, -79.2], "17": [40.3, -76.8], "18": [41.1, -75.6], "19": [39.9, -75.2],
+      "20": [38.9, -77.0], "21": [39.2, -76.6], "22": [38.8, -77.3], "23": [37.3, -77.0], "24": [37.3, -80.0],
+      "25": [38.3, -81.6], "26": [39.3, -80.3], "27": [35.8, -78.6], "28": [35.2, -80.8], "29": [34.0, -81.0],
+      "30": [33.7, -84.4], "31": [32.0, -83.5], "32": [30.3, -81.7], "33": [26.1, -80.2], "34": [27.9, -82.5],
+      "35": [33.5, -86.8], "36": [32.3, -86.3], "37": [36.1, -86.8], "38": [35.1, -89.9], "39": [32.3, -90.2],
+      "40": [38.2, -85.7], "41": [37.7, -84.3], "42": [37.0, -87.1], "43": [40.0, -82.9], "44": [41.5, -81.7],
+      "45": [39.1, -84.5], "46": [39.8, -86.1], "47": [38.0, -87.5], "48": [42.3, -83.0], "49": [42.9, -85.6],
+      "50": [41.6, -93.6], "51": [41.2, -95.8], "52": [42.5, -91.6], "53": [43.0, -87.9], "54": [44.5, -89.5],
+      "55": [44.9, -93.2], "56": [46.8, -94.2], "57": [44.0, -99.9], "58": [47.5, -100.5],"59": [46.8, -110.3],
+      "60": [41.8, -87.6], "61": [40.7, -89.6], "62": [38.6, -89.9], "63": [38.6, -90.2], "64": [39.1, -94.6],
+      "65": [37.9, -92.5], "66": [39.0, -95.6], "67": [37.7, -97.3], "68": [41.2, -96.0], "69": [41.8, -101.5],
+      "70": [29.9, -90.1], "71": [32.5, -93.7], "72": [34.7, -92.3], "73": [35.5, -97.5], "74": [36.1, -95.9],
+      "75": [32.8, -96.8], "76": [32.7, -97.3], "77": [29.7, -95.3], "78": [30.3, -97.7], "79": [33.5, -101.8],
+      "80": [39.7, -104.9],"81": [38.5, -107.0],"82": [43.0, -107.5],"83": [43.6, -116.2],"84": [40.7, -111.9],
+      "85": [33.4, -112.0],"86": [35.2, -111.6],"87": [35.1, -106.6],"88": [33.4, -104.5],"89": [36.2, -115.1],
+      "90": [34.0, -118.2],"91": [34.2, -118.4],"92": [32.7, -117.1],"93": [36.7, -119.8],"94": [37.7, -122.4],
+      "95": [38.6, -121.5],"96": [21.3, -157.8],"97": [45.5, -122.6],"98": [47.6, -122.3],"99": [47.6, -117.4]
+    };
+
+    let allData = [];
+    let map, heatLayer;
+    let b2bChartInstance, revChartInstance, yearChartInstance, sectorChartInstance;
+
+    // Initialize Map
+    function initMap() {
+      map = L.map('map').setView([38.5, -96.5], 4);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+        maxZoom: 18
+      }).addTo(map);
+    }
+
+    // Load CSV via PapaParse
+    function loadData() {
+      Papa.parse('data/grant_applications.csv', {
+        download: true,
+        header: true,
+        skipEmptyLines: true,
+        complete: function(results) {
+          allData = results.data;
+          document.getElementById('loader').classList.add('hidden');
+          setupFilters();
+          renderDashboard();
+        },
+        error: function(err) {
+          document.getElementById('loader').innerHTML = `
+            <span class="text-red-600 font-semibold">Error reading CSV file: ${err.message}. Ensure data/grant_applications.csv exists.</span>
+          `;
+        }
+      });
+    }
+
+    // Populate dynamic select options
+    function setupFilters() {
+      const years = new Set();
+      const models = new Set();
+      const revs = new Set();
+
+      allData.forEach(row => {
+        const y = (row['Grant Year'] || '').replace('.0', '').trim();
+        if (y) years.add(y);
+
+        const m = (row['Service based company or B2B service'] || '').trim();
+        if (['B2C', 'B2B', 'B2B and B2C'].includes(m)) models.add(m);
+
+        const r = (row['Qualifying Annual Revenues'] || '').trim();
+        if (r && !r.startsWith('0') && r !== 'NaN') revs.add(r);
+      });
+
+      const yearSelect = document.getElementById('filterYear');
+      Array.from(years).sort().reverse().forEach(y => {
+        yearSelect.innerHTML += `<option value="${y}">${y}</option>`;
+      });
+
+      const modelSelect = document.getElementById('filterModel');
+      ['B2C', 'B2B', 'B2B and B2C'].forEach(m => {
+        modelSelect.innerHTML += `<option value="${m}">${m}</option>`;
+      });
+
+      const revSelect = document.getElementById('filterRev');
+      Array.from(revs).sort().forEach(r => {
+        revSelect.innerHTML += `<option value="${r}">${r}</option>`;
+      });
+
+      // Attach filter change listeners
+      [yearSelect, modelSelect, revSelect].forEach(sel => {
+        sel.addEventListener('change', renderDashboard);
+      });
+    }
+
+    // Re-render dashboard based on selected filters
+    function renderDashboard() {
+      const selYear = document.getElementById('filterYear').value;
+      const selModel = document.getElementById('filterModel').value;
+      const selRev = document.getElementById('filterRev').value;
+
+      const filtered = allData.filter(row => {
+        const y = (row['Grant Year'] || '').replace('.0', '').trim();
+        const m = (row['Service based company or B2B service'] || '').trim();
+        const r = (row['Qualifying Annual Revenues'] || '').trim();
+
+        if (selYear !== 'ALL' && y !== selYear) return false;
+        if (selModel !== 'ALL' && m !== selModel) return false;
+        if (selRev !== 'ALL' && r !== selRev) return false;
+        return true;
+      });
+
+      // Update KPIs
+      document.getElementById('kpiCount').innerText = filtered.length.toLocaleString();
+
+      // Aggregate Stats
+      const stateCounts = {};
+      const modelCounts = { 'B2C': 0, 'B2B': 0, 'B2B & B2C': 0, 'Other': 0 };
+      const revCounts = {};
+      const yearCounts = {};
+      const sectorCounts = {};
+      const heatPoints = [];
+
+      filtered.forEach(row => {
+        // Zip Heatmap calculation with dispersion jitter
+        const rawZip = (row['Zip'] || '').toString().padStart(5, '0');
+        const prefix = rawZip.slice(0, 2);
+        if (ZIP2_COORDS[prefix]) {
+          const base = ZIP2_COORDS[prefix];
+          const zipNum = parseInt(rawZip.slice(2, 5)) || 0;
+          // Deterministic dispersion across zip radius
+          const latJitter = ((zipNum % 100) / 100 - 0.5) * 0.45;
+          const lngJitter = (Math.floor(zipNum / 100) / 10 - 0.5) * 0.45;
+          heatPoints.push([base[0] + latJitter, base[1] + lngJitter, 0.6]);
+        }
+
+        // State Count
+        const st = (row['State'] || row['Company State'] || '').trim().toUpperCase();
+        if (st && st.length === 2) {
+          stateCounts[st] = (stateCounts[st] || 0) + 1;
+        }
+
+        // Business Model
+        const mod = (row['Service based company or B2B service'] || '').trim();
+        if (mod === 'B2C') modelCounts['B2C']++;
+        else if (mod === 'B2B') modelCounts['B2B']++;
+        else if (mod.includes('B2B') && mod.includes('B2C')) modelCounts['B2B & B2C']++;
+        else modelCounts['Other']++;
+
+        // Revenue
+        const rev = (row['Qualifying Annual Revenues'] || '').trim();
+        if (rev && rev !== 'NaN') revCounts[rev] = (revCounts[rev] || 0) + 1;
+
+        // Year
+        const yr = (row['Grant Year'] || '').replace('.0', '').trim();
+        if (yr) yearCounts[yr] = (yearCounts[yr] || 0) + 1;
+
+        // Sector
+        const sec = (row['Company Sector'] || '').trim();
+        if (sec && sec !== 'NaN') {
+          const shortSec = sec.length > 28 ? sec.slice(0, 25) + '...' : sec;
+          sectorCounts[shortSec] = (sectorCounts[shortSec] || 0) + 1;
+        }
+      });
+
+      // Update Heatmap
+      if (heatLayer) map.removeLayer(heatLayer);
+      heatLayer = L.heatLayer(heatPoints, { radius: 15, blur: 18, maxZoom: 10, max: 0.8 }).addTo(map);
+      document.getElementById('heatPointCount').innerText = `${heatPoints.length.toLocaleString()} locations mapped`;
+
+      // Update KPI highlights
+      const topStateEntry = Object.entries(stateCounts).sort((a,b) => b[1] - a[1])[0];
+      document.getElementById('kpiTopState').innerText = topStateEntry ? `${topStateEntry[0]} (${topStateEntry[1].toLocaleString()})` : '--';
+
+      const topModelEntry = Object.entries(modelCounts).filter(x => x[0] !== 'Other').sort((a,b) => b[1] - a[1])[0];
+      document.getElementById('kpiTopModel').innerText = topModelEntry ? topModelEntry[0] : '--';
+
+      const topRevEntry = Object.entries(revCounts).sort((a,b) => b[1] - a[1])[0];
+      document.getElementById('kpiTopRev').innerText = topRevEntry ? topRevEntry[0] : '--';
+
+      // Render Charts
+      renderCharts(modelCounts, revCounts, yearCounts, sectorCounts);
+    }
+
+    // Chart.js instances
+    function renderCharts(modelCounts, revCounts, yearCounts, sectorCounts) {
+      // 1. B2B Doughnut
+      if (b2bChartInstance) b2bChartInstance.destroy();
+      b2bChartInstance = new Chart(document.getElementById('b2bChart'), {
+        type: 'doughnut',
+        data: {
+          labels: Object.keys(modelCounts),
+          datasets: [{
+            data: Object.values(modelCounts),
+            backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#cbd5e1'],
+            borderWidth: 2,
+            borderColor: '#ffffff'
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+      });
+
+      // 2. Revenue Horizontal Bar
+      const sortedRev = Object.entries(revCounts).sort((a, b) => b[1] - a[1]).slice(0, 7);
+      if (revChartInstance) revChartInstance.destroy();
+      revChartInstance = new Chart(document.getElementById('revChart'), {
+        type: 'bar',
+        data: {
+          labels: sortedRev.map(d => d[0]),
+          datasets: [{
+            label: 'Applicants',
+            data: sortedRev.map(d => d[1]),
+            backgroundColor: '#6366f1',
+            borderRadius: 6
+          }]
+        },
+        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+      });
+
+      // 3. Applications by Year
+      const sortedYears = Object.entries(yearCounts).sort((a, b) => a[0].localeCompare(b[0]));
+      if (yearChartInstance) yearChartInstance.destroy();
+      yearChartInstance = new Chart(document.getElementById('yearChart'), {
+        type: 'bar',
+        data: {
+          labels: sortedYears.map(d => d[0]),
+          datasets: [{
+            label: 'Grant Applications',
+            data: sortedYears.map(d => d[1]),
+            backgroundColor: '#0ea5e9',
+            borderRadius: 6
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+      });
+
+      // 4. Top Sectors
+      const sortedSectors = Object.entries(sectorCounts).sort((a, b) => b[1] - a[1]).slice(0, 6);
+      if (sectorChartInstance) sectorChartInstance.destroy();
+      sectorChartInstance = new Chart(document.getElementById('sectorChart'), {
+        type: 'bar',
+        data: {
+          labels: sortedSectors.map(d => d[0]),
+          datasets: [{
+            label: 'Count',
+            data: sortedSectors.map(d => d[1]),
+            backgroundColor: '#8b5cf6',
+            borderRadius: 6
+          }]
+        },
+        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+      });
+    }
+
+    // Initialization
+    window.addEventListener('DOMContentLoaded', () => {
+      initMap();
+      loadData();
+    });
+  </script>
 </body>
 </html>
